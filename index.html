@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Garage Splat Viewer</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #0a0a0f;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        #app-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            touch-action: none;
+        }
+        #loading {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            background: #0a0a0f;
+            color: #e8e8f0;
+            z-index: 100;
+            transition: opacity 0.5s ease;
+        }
+        #loading.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        #loading .orb {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #9fd8ff, #19a0ff 60%, #0a55a0);
+            box-shadow: 0 0 24px 6px rgba(40, 160, 255, 0.55);
+            animation: pulse 1.4s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 18px 4px rgba(40, 160, 255, 0.4); }
+            50% { transform: scale(1.15); box-shadow: 0 0 32px 10px rgba(40, 160, 255, 0.7); }
+        }
+        #loading .label { font-size: 14px; letter-spacing: 0.04em; opacity: 0.85; }
+        #loading .bar {
+            width: 240px;
+            height: 4px;
+            border-radius: 2px;
+            background: rgba(255, 255, 255, 0.12);
+            overflow: hidden;
+        }
+        #loading .bar > div {
+            height: 100%;
+            width: 0%;
+            border-radius: 2px;
+            background: linear-gradient(90deg, #19a0ff, #7fd0ff);
+            transition: width 0.2s ease;
+        }
+        #help {
+            position: fixed;
+            left: 12px;
+            bottom: 12px;
+            color: rgba(232, 232, 240, 0.75);
+            background: rgba(10, 10, 18, 0.55);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 12px;
+            line-height: 1.7;
+            z-index: 50;
+            user-select: none;
+        }
+        #help b { color: #8fd0ff; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <canvas id="app-canvas"></canvas>
+    <div id="loading">
+        <div class="orb"></div>
+        <div class="label">Loading garage…</div>
+        <div class="bar"><div id="loading-progress"></div></div>
+    </div>
+    <div id="help">
+        <b>WASD</b> move &nbsp;·&nbsp; <b>Arrows</b> move orb &nbsp;·&nbsp; <b>L-drag</b> rotate &nbsp;·&nbsp; <b>R-drag</b> pan &nbsp;·&nbsp; <b>Scroll</b> zoom<br>
+        <b>Double-click</b> place orb &nbsp;·&nbsp; <b>F</b> frame orb &nbsp;·&nbsp; <b>O</b> orbit-orb mode
+    </div>
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+// Custom gsplat shader hook (gsplatModifyVS chunk). In unified mode this runs
+// in the copy-to-workbuffer pass where splat centers are in WORLD space.
+//
+// Two effects:
+//  1. Orb glow: point-light style falloff added to splat color around the orb.
+//  2. Cutaway: splats between the camera and the focus point (minus a keep
+//     distance) fade out, so you can zoom outside the garage and still see in.
+
+const GLSL = /* glsl */`
+uniform vec3 uOrbPos;
+uniform vec3 uOrbColor;
+uniform float uOrbIntensity;
+uniform float uOrbRadius;
+
+uniform float uCutEnabled;
+uniform vec3 uCutCamPos;
+uniform vec3 uCutFocusPos;
+uniform float uCutDist;
+uniform float uCutSoft;
+uniform vec3 uRoomMin;
+uniform vec3 uRoomMax;
+
+void modifySplatCenter(inout vec3 center) {
+}
+
+void modifySplatRotationScale(vec3 originalCenter, vec3 modifiedCenter, inout vec4 rotation, inout vec3 scale) {
+}
+
+void modifySplatColor(vec3 center, inout vec4 color) {
+    // orb glow onto the splat
+    if (uOrbIntensity > 0.0) {
+        float d = distance(center, uOrbPos);
+        float r = max(uOrbRadius, 0.001);
+        float atten = 1.0 / (1.0 + (d * d) / (r * r));
+        // hard cutoff well outside the radius so distant splats are untouched
+        float cutoff = smoothstep(r * 4.0, r, d);
+        color.rgb += uOrbColor * (uOrbIntensity * atten * cutoff);
+    }
+
+    // cutaway: hide splats on the camera side of the keep volume, and hide
+    // floaters/outliers outside the room box for a clean dollhouse view
+    if (uCutEnabled > 0.5) {
+        vec3 toFocus = uCutFocusPos - uCutCamPos;
+        float focusDist = length(toFocus);
+        vec3 dir = toFocus / max(focusDist, 0.0001);
+        float t = dot(center - uCutCamPos, dir);
+        float cutPlane = focusDist - uCutDist;
+        float fade = smoothstep(cutPlane - uCutSoft, cutPlane, t);
+
+        vec3 roomCenter = (uRoomMin + uRoomMax) * 0.5;
+        vec3 roomHalf = (uRoomMax - uRoomMin) * 0.5;
+        vec3 outsideVec = max(abs(center - roomCenter) - roomHalf, vec3(0.0));
+        float outsideDist = length(outsideVec);
+        fade *= 1.0 - smoothstep(0.0, 0.6, outsideDist);
+
+        color.a *= fade;
+    }
+}
+`;
+
+const WGSL = /* wgsl */`
+uniform uOrbPos: vec3f;
+uniform uOrbColor: vec3f;
+uniform uOrbIntensity: f32;
+uniform uOrbRadius: f32;
+
+uniform uCutEnabled: f32;
+uniform uCutCamPos: vec3f;
+uniform uCutFocusPos: vec3f;
+uniform uCutDist: f32;
+uniform uCutSoft: f32;
+uniform uRoomMin: vec3f;
+uniform uRoomMax: vec3f;
+
+fn modifySplatCenter(center: ptr<function, vec3f>) {
+}
+
+fn modifySplatRotationScale(originalCenter: vec3f, modifiedCenter: vec3f, rotation: ptr<function, vec4f>, scale: ptr<function, vec3f>) {
+}
+
+fn modifySplatColor(center: vec3f, color: ptr<function, vec4f>) {
+    if (uniform.uOrbIntensity > 0.0) {
+        let d = distance(center, uniform.uOrbPos);
+        let r = max(uniform.uOrbRadius, 0.001);
+        let atten = 1.0 / (1.0 + (d * d) / (r * r));
+        let cutoff = smoothstep(r * 4.0, r, d);
+        (*color) = vec4f((*color).rgb + uniform.uOrbColor * (uniform.uOrbIntensity * atten * cutoff), (*color).a);
+    }
+
+    if (uniform.uCutEnabled > 0.5) {
+        let toFocus = uniform.uCutFocusPos - uniform.uCutCamPos;
+        let focusDist = length(toFocus);
+        let dir = toFocus / max(focusDist, 0.0001);
+        let t = dot(center - uniform.uCutCamPos, dir);
+        let cutPlane = focusDist - uniform.uCutDist;
+        var fade = smoothstep(cutPlane - uniform.uCutSoft, cutPlane, t);
+
+        let roomCenter = (uniform.uRoomMin + uniform.uRoomMax) * 0.5;
+        let roomHalf = (uniform.uRoomMax - uniform.uRoomMin) * 0.5;
+        let outsideVec = max(abs(center - roomCenter) - roomHalf, vec3f(0.0));
+        let outsideDist = length(outsideVec);
+        fade = fade * (1.0 - smoothstep(0.0, 0.6, outsideDist));
+
+        (*color) = vec4f((*color).rgb, (*color).a * fade);
+    }
+}
+`;
+
+export class SplatFX {
+    constructor(app, splatEntity) {
+        this.app = app;
+        this.splatEntity = splatEntity;
+        this._last = null;
+    }
+
+    /** Install the custom chunk on the unified gsplat template material. */
+    apply() {
+        const material = this.app.scene.gsplat.material;
+        material.getShaderChunks('glsl').set('gsplatModifyVS', GLSL);
+        material.getShaderChunks('wgsl').set('gsplatModifyVS', WGSL);
+        material.update();
+    }
+
+    /** One-time room bounds for the dollhouse fade (slightly expanded box). */
+    setRoomBounds(min, max) {
+        const g = this.splatEntity.gsplat;
+        g.setParameter('uRoomMin', [min.x, min.y, min.z]);
+        g.setParameter('uRoomMax', [max.x, max.y, max.z]);
+    }
+
+    /**
+     * Push uniforms. Setting parameters on the gsplat component marks the
+     * placement render-dirty (re-copies the workbuffer + resorts), so this is
+     * only called when values actually changed.
+     */
+    setParams(p) {
+        const key = p.join(',');
+        if (key === this._last) return false;
+        this._last = key;
+
+        const g = this.splatEntity.gsplat;
+        g.setParameter('uOrbPos', [p[0], p[1], p[2]]);
+        g.setParameter('uOrbColor', [p[3], p[4], p[5]]);
+        g.setParameter('uOrbIntensity', p[6]);
+        g.setParameter('uOrbRadius', p[7]);
+        g.setParameter('uCutEnabled', p[8]);
+        g.setParameter('uCutCamPos', [p[9], p[10], p[11]]);
+        g.setParameter('uCutFocusPos', [p[12], p[13], p[14]]);
+        g.setParameter('uCutDist', p[15]);
+        g.setParameter('uCutSoft', p[16]);
+        return true;
+    }
+}

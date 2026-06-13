@@ -17,16 +17,31 @@
     },
     "camera": {
       "orbitOrb": false,
+      "fov": 75,
       "moveSpeed": 2.5,
       "moveFastSpeed": 7,
       "rotateSpeed": 0.25,
-      "renderScale": 1.5
+      "renderScale": 1.5,
+      "cinematic": {
+        "distance": 3.0,
+        "elevation": 30,
+        "minDistance": 1.8,
+        "orbitSpeed": 1.2,
+        "posSmoothing": 1.5,
+        "lookSmoothing": 4.0
+      }
     },
     "cutaway": {
       "mode": "auto",
       "distance": 2.5,
       "softness": 1.2,
       "wallCut": 1.5
+    },
+    "splat": {
+      "brightness": 1.0,
+      "bloomIntensity": 0.0,
+      "bloomThreshold": 0.5,
+      "bloomBlur": 4
     },
     "occluder": {
       "enabled": false

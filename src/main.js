@@ -23,6 +23,7 @@ import { applyParams, resolveStartup, resetToDefaults, saveSession } from './set
 import { Orb } from './orb.js';
 import { SplatFX } from './splat-effects.js';
 import { OrbSources } from './orb-sources.js';
+import { CinematicCamera } from './cinematic-camera.js';
 import { createSettingsPanel } from './settings.js';
 
 const canvas = document.getElementById('app-canvas');
@@ -117,7 +118,7 @@ function buildScene() {
     const camera = new Entity('camera');
     camera.addComponent('camera', {
         clearColor: new Color(0.03, 0.03, 0.05),
-        fov: 75,
+        fov: params.camera.fov,
         nearClip: 0.05,
         farClip: 1000
     });
@@ -185,6 +186,9 @@ function buildScene() {
     // ---------------------------------------------------------- orb sources
     const sources = new OrbSources(app, camera, orb, params, { center, halfExtents });
 
+    // ---------------------------------------------------------- cinematic cam
+    const cinematic = new CinematicCamera(camera, controls, orb, { center, halfExtents }, params);
+
     const applyView = (viewSettings) => {
         const eye = new Vec3(viewSettings.position.x, viewSettings.position.y, viewSettings.position.z);
         const focus = new Vec3(viewSettings.focus.x, viewSettings.focus.y, viewSettings.focus.z);
@@ -213,6 +217,7 @@ function buildScene() {
             controls.moveSpeed = params.camera.moveSpeed;
             controls.moveFastSpeed = params.camera.moveFastSpeed;
             controls.rotateSpeed = params.camera.rotateSpeed;
+            camera.camera.fov = params.camera.fov;
             app.graphicsDevice.maxPixelRatio = Math.min(window.devicePixelRatio, params.camera.renderScale);
             app.resizeCanvas();
         },
@@ -258,7 +263,6 @@ function buildScene() {
     window.__viewer = { app, splat, occluder, camera, controls, orb, sources, center, halfExtents, params };
 
     // ---------------------------------------------------------- per-frame
-    const lastOrbFocus = new Vec3(Infinity, Infinity, Infinity);
     const roomBox = new BoundingBox(center.clone(), halfExtents.clone());
 
     const round = (v, step) => Math.round(v / step) * step;
@@ -267,14 +271,19 @@ function buildScene() {
         sources.update(dt);
         orb.update(dt, params.orb.smoothing);
 
+        // cinematic follow mode: drive the camera automatically (suspends the
+        // manual CameraControls while active)
+        if (params.camera.orbitOrb !== cinematic.active) {
+            if (params.camera.orbitOrb) {
+                cinematic.start();
+            } else {
+                cinematic.stop();
+            }
+        }
+        cinematic.update(dt);
+
         const orbPos = orb.getPosition();
         const camPos = camera.getPosition();
-
-        // orbit-orb mode: keep the orb as the orbit pivot
-        if (params.camera.orbitOrb && lastOrbFocus.distance(orbPos) > 0.05) {
-            lastOrbFocus.copy(orbPos);
-            controls.focusPoint = orbPos;
-        }
 
         // cutaway state
         const outside = !roomBox.containsPoint(camPos);

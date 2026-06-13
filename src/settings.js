@@ -29,12 +29,22 @@ export function createSettingsPanel(params, hooks) {
 
     // --- Camera ---
     const cam = pane.addFolder({ title: 'Camera' });
-    cam.addBinding(params.camera, 'orbitOrb', { label: 'orbit the orb (O)' });
+    cam.addBinding(params.camera, 'fov', { min: 20, max: 120, step: 1, label: 'FOV' });
+    cam.addBinding(params.camera, 'orbitOrb', { label: 'cinematic follow (O)' });
     cam.addBinding(params.camera, 'moveSpeed', { min: 0.5, max: 20, step: 0.5, label: 'speed' });
     cam.addBinding(params.camera, 'moveFastSpeed', { min: 1, max: 40, step: 0.5, label: 'fast speed' });
     cam.addBinding(params.camera, 'rotateSpeed', { min: 0.05, max: 1, step: 0.05, label: 'look speed' });
     cam.addBinding(params.camera, 'renderScale', { min: 0.5, max: 2, step: 0.25, label: 'render scale' });
     cam.addButton({ title: 'Frame orb (F)' }).on('click', () => hooks.frameOrb());
+
+    const cine = cam.addFolder({ title: 'Cinematic', expanded: false });
+    cine.addBinding(params.camera.cinematic, 'distance', { min: 1, max: 8, step: 0.1, label: 'distance (m)' });
+    cine.addBinding(params.camera.cinematic, 'elevation', { min: 0, max: 80, step: 1, label: 'look-down (deg)' });
+    cine.addBinding(params.camera.cinematic, 'minDistance', { min: 0.3, max: 6, step: 0.1, label: 'orbit when (m)' });
+    cine.addBinding(params.camera.cinematic, 'orbitSpeed', { min: 0.1, max: 4, step: 0.1, label: 'orbit speed' });
+    cine.addBinding(params.camera.cinematic, 'posSmoothing', { min: 0.2, max: 5, step: 0.1, label: 'glide speed' });
+    cine.addBinding(params.camera.cinematic, 'lookSmoothing', { min: 0.5, max: 12, step: 0.5, label: 'aim speed' });
+
     cam.on('change', () => hooks.onCameraChanged());
 
     // --- Cutaway ---

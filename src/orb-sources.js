@@ -113,6 +113,9 @@ export class OrbSources {
             const y = this.params.source.floorY + this.params.orb.height;
             this.orb.setTarget(new Vec3(x, y, z));
         } else if (this.params.source.mode === 'click') {
+            // keep the orb riding the travel plane even when no arrow key is
+            // held, so height changes take effect immediately
+            this.orb.target.y = this.params.source.floorY + this.params.orb.height;
             this.updateKeyboard(dt);
         }
     }

@@ -13,20 +13,20 @@ sensor so a person walking the real garage shows up as the orb in the scan.
 
 ```bash
 npm install
-npm run dev          # vite (port 5173) + the ESPHome bridge concurrently
-npm run dev:vite-only # viewer only, no sensor bridge
+npm run dev          # vite (port 5173); dev:vite-only is a synonym
 npm run build        # vite production build -> dist/
 npm run preview      # serve the built dist/
-npm run bridge       # run only scripts/esphome-bridge.mjs
 ```
 
 There is no test suite and no eslint config checked in (despite an `npx eslint`
 permission). "Verifying" a change means running `npm run dev` and exercising it in the
-browser; `window.__viewer` exposes `{ app, splat, camera, controls, orb, sources,
-autoCam, minimap, center, halfExtents, params }` for console inspection.
+browser; `window.__viewer` exposes `{ app, splat, camera, controls, orb, field, sources,
+autoCam, minimap, center, halfExtents, params }` for console inspection (`orb` is the
+primary orb; `field` is the full `OrbField`).
 
-The sensor host is configured via `.env` (`RADAR_PROXY_TARGET`) and the bridge reads
-`ESPHOME_HOST` / `PORT` from the environment.
+The sensor is a self-contained ESP device (`firmware/garage-radar/`) the viewer connects
+to directly over WebSocket (`ws://garage-radar.local:81`, in `defaults.json`). There is no
+bridge or `.env` to configure.
 
 ## Architecture
 
@@ -40,14 +40,20 @@ classes constructed once in `buildScene()`:
 
 - **`Orb`** (`orb.js`) — emissive sphere that writes depth. Holds a `target` and eases its
   actual position toward it each frame (exponential smoothing). `teleport()` snaps, `setTarget()` eases.
-- **`OrbSources`** (`orb-sources.js`) — decides where the orb's target should be. Three modes
+- **`OrbField`** (`orb-field.js`) — owns up to three `Orb`s (one per tracked person) and is
+  what `main.js` actually wires to. `primary()` (always orb 0) feeds the single-target
+  subsystems (follow camera, frame-orb, glow-facing, session save); `active()` feeds the glow
+  shader, minimap and overlay. Orb i tracks LD2450 slot i (index == identity, no swapping).
+- **`OrbSources`** (`orb-sources.js`) — decides where the orbs' targets should be. Three modes
   selected by `params.source.mode`: `click` (double-click floor + arrow keys), `demo`
-  (lissajous wander), `sensor` (WebSocket JSON `{x, y}` in mm). `sensorToWorld()` applies
+  (lissajous wander), `sensor` (WebSocket JSON `{targets:[{x,y,speed}, …]}` in mm, up to three).
+  Click/demo drive only the primary orb. `sensorToWorld()` applies
   the origin/rotation/scale/flip calibration that maps sensor space to world space.
 - **`SplatFX`** (`splat-effects.js`) — the visual heart. Installs a custom `gsplatModifyVS`
   shader chunk (both GLSL and WGSL — keep them in sync) on the shared gsplat material. It
   does the orb glow (point-light falloff, surface-normal-aware via the gaussian's flattest
-  axis) and the cutaway/dollhouse fade. Uniforms are pushed via `setParams()`.
+  axis) accumulated for up to three orbs (`uOrbPos0..2` + `uOrbCount`), and the
+  cutaway/dollhouse fade. Uniforms are pushed via `setParams({ orbs: [[x,y,z], …], … })`.
 - **`WaypointCamera`** (`waypoint-camera.js`) — the "anchor follow" / cinematic camera
   (toggled by `params.camera.orbitOrb`, key `O`). Floor is partitioned into zones, each with
   a high corner "anchor eye." The orb is projected onto a control loop (zone centers) to get a
@@ -96,8 +102,16 @@ classes constructed once in `buildScene()`:
 
 ### The sensor path
 
-ESPHome's `web_server` only emits Server-Sent Events; the viewer only speaks raw WebSocket.
-`scripts/esphome-bridge.mjs` bridges them: it connects to `http://<host>/events` (using `node:http`
-deliberately — undici/`fetch` stalls on ESPHome's chunked encoding), parses the `Orb X` / `Orb Y`
-sensor states, and rebroadcasts `{x, y}` JSON on `ws://localhost:8081`. The viewer's sensor mode
-connects to that WebSocket.
+The radar runs custom ESP32 firmware (`firmware/garage-radar/`, Arduino/PlatformIO) that reads
+the **raw 30-byte LD2450 frame** (`AA FF 03 00` + 3×8-byte targets + `55 CC`) directly off UART,
+decodes each target's signed-magnitude X/Y/speed, and **serves all active targets as one JSON
+packet per frame over its own WebSocket** (`ws://garage-radar.local:81`, port 81) at the sensor's
+native ~10 Hz: `{"targets":[{"x":<mm>,"y":<mm>,"speed":<cm/s>}, …]}`. The viewer's sensor mode
+(`orb-sources.js`) connects straight to it — no SSE, no Node bridge.
+
+This replaced an ESPHome setup whose `web_server` only spoke SSE (which deduped identical states),
+exposed just target_1's X/Y as two separate sensors, and needed a Node bridge to re-pair them.
+The old config is kept (superseded) at `esphome/garage-radar.yaml` for flashing history only.
+
+Because the ESP serves insecure `ws://`, the viewer page must be loaded over **http** (Vite
+dev / LAN) — an `https` page can't open the socket (mixed content).

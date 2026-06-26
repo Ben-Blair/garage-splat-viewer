@@ -21,8 +21,8 @@ npm run preview      # serve the built dist/
 There is no test suite and no eslint config checked in (despite an `npx eslint`
 permission). "Verifying" a change means running `npm run dev` and exercising it in the
 browser; `window.__viewer` exposes `{ app, splat, camera, controls, orb, field, sources,
-autoCam, minimap, center, halfExtents, params }` for console inspection (`orb` is the
-primary orb; `field` is the full `OrbField`).
+autoCam, minimap, sensorOverlay, center, halfExtents, params }` for console inspection (`orb`
+is the primary orb; `field` is the full `OrbField`).
 
 The sensor is a self-contained ESP device (`firmware/garage-radar/`) the viewer connects
 to directly over WebSocket (`ws://garage-radar.local:81`, in `defaults.json`). There is no
@@ -64,8 +64,12 @@ classes constructed once in `buildScene()`:
   desktop kiosk: no mobile/touch/gamepad/XR input paths. `main.js` only sets `moveSpeed`,
   `moveFastSpeed`, `rotateSpeed`, `zoomRange`; the controllers keep their own damping/range
   defaults.
-- **`SensorMinimap`** (`sensor-minimap.js`) — bottom-left radar plot of the live mmWave stream,
-  visible only in sensor mode.
+- **`SensorMinimap`** (`sensor-minimap.js`) — bottom-left radar plot of the live mmWave stream
+  (all targets, colour-coded per slot), visible only in sensor mode.
+- **`SensorOverlay`** (`sensor-overlay.js`) — immediate-mode in-scene gizmo (drawn each frame in
+  world space) showing where the program thinks the sensor sits and looks — marker, facing, FOV
+  cone, plus a live line to each tracked orb — for fine-tuning sensor placement against the scan.
+  Visible in sensor mode when `params.source.sensor.showOverlay` is on.
 - **Settings panel** (`settings.js` + `panel-controls.js` + `panel.css`) — a hand-rolled,
   dependency-free control toolkit (replaced Tweakpane). Controls write straight through to the
   shared `params` object and fire `onChange` hooks defined in `main.js`.
@@ -82,8 +86,9 @@ classes constructed once in `buildScene()`:
   world space — so orb/camera positions are passed as plain world coordinates.
 
 - **Setting a gsplat parameter is expensive.** It marks the placement render-dirty (re-copies the
-  workbuffer and resorts). `SplatFX.setParams()` takes a named-field object (`orbPos`, `orbColor`,
-  `cutCamPos`, `viewPos`, etc.) and short-circuits when nothing changed — it flattens those fields
+  workbuffer and resorts). `SplatFX.setParams()` takes a named-field object (`orbs` — an array of
+  up to three `[x,y,z]`, `orbColor`, `cutCamPos`, `viewPos`, etc.) and short-circuits when nothing
+  changed — it flattens those fields
   into a change-key and compares against the last. `main.js` quantizes positions (`round(v, 0.01)`
   etc.) before passing them so tiny jitter doesn't trigger a resort every frame. Preserve both the
   named contract and the quantization when touching the update loop.

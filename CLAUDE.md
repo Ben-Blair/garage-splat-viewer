@@ -13,7 +13,7 @@ sensor so a person walking the real garage shows up as the orb in the scan.
 
 ```bash
 npm install
-npm run dev          # vite (port 5173); dev:vite-only is a synonym
+npm run dev          # vite (port 5173)
 npm run build        # vite production build -> dist/
 npm run preview      # serve the built dist/
 ```
@@ -116,7 +116,7 @@ native ~10 Hz: `{"targets":[{"x":<mm>,"y":<mm>,"speed":<cm/s>}, …]}`. The view
 
 This replaced an ESPHome setup whose `web_server` only spoke SSE (which deduped identical states),
 exposed just target_1's X/Y as two separate sensors, and needed a Node bridge to re-pair them.
-The old config is kept (superseded) at `esphome/garage-radar.yaml` for flashing history only.
+That ESPHome config and the Node bridge have been removed; the migration lives in git history.
 
 Because the ESP serves insecure `ws://`, the viewer page must be loaded over **http** (Vite
 dev / LAN) — an `https` page can't open the socket (mixed content).

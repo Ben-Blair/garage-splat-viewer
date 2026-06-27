@@ -16,13 +16,22 @@ npm install
 npm run dev          # vite (port 5173)
 npm run build        # vite production build -> dist/
 npm run preview      # serve the built dist/
+
+npm run lint         # eslint (flat config, eslint.config.js)
+npm run typecheck    # tsc --checkJs over src (jsconfig.json, no emit)
+npm test             # vitest unit tests (tests/)
 ```
 
-There is no test suite and no eslint config checked in (despite an `npx eslint`
-permission). "Verifying" a change means running `npm run dev` and exercising it in the
+Unit tests (vitest) cover the pure helpers — `math-utils`, `orb-sources.parseTargets`,
+`settings-store` merge/migration, and the panel colour converters. They run in CI alongside
+lint + typecheck (`.github/workflows/`), which gate the Pages deploy. Beyond the unit tests,
+"verifying" a behavioural change still means running `npm run dev` and exercising it in the
 browser; `window.__viewer` exposes `{ app, splat, camera, controls, orb, field, sources,
 autoCam, minimap, sensorOverlay, center, halfExtents, params }` for console inspection (`orb`
 is the primary orb; `field` is the full `OrbField`).
+
+Type-checking is JSDoc + `checkJs` (no `.ts` sources); `camera-controls.js` (vendored) is
+excluded from the check. Keep new `src/*.js` passing `npm run typecheck`.
 
 The sensor is a self-contained ESP device (`firmware/garage-radar/`) the viewer connects
 to directly over WebSocket (`ws://garage-radar.local:81`, in `defaults.json`). There is no
